@@ -86,8 +86,16 @@
     const body = element('div', 'body');
     body.append(element('div', 'details', 'Comments'));
     if (item.showSort) body.append(sortControl(item.sort, host, () => host.refreshSearch()));
-    const title = element('a', 'video-title', item.title || item.video_id);
+    const title = element('a', 'video-title creator-chip');
     title.href = host.ui.localVideoHref(item.video_id);
+    if (item.channelThumbnailPath) {
+      const avatar = element('img', 'channel-avatar');
+      avatar.src = `/${item.channelThumbnailPath.replace(/^\/+/, '')}`;
+      avatar.alt = '';
+      avatar.loading = 'lazy';
+      title.append(avatar);
+    }
+    title.append(element('span', 'creator-name', item.title || item.video_id));
     body.append(title);
     if (item.root_comment) body.append(commentRow(item.root_comment, item.video_id, known, item.query, host));
     const ownReplies = element('div', 'ytc-participant-preview');
@@ -131,9 +139,13 @@
   async function fetchResults({ query, limit, offset }, host, videoId = '') {
     const result = await host.requestJson('search', { q: query, limit, offset, video_id: videoId });
     const rows = result.results.flatMap(item => [...item.own_comments, ...(item.root_comment ? [item.root_comment] : [])]);
-    const known = await profiles(rows, host);
+    const [known, videos] = await Promise.all([
+      profiles(rows, host),
+      host.libraryVideos(result.results.map(item => item.video_id)).catch(() => new Map()),
+    ]);
     for (const [index, item] of result.results.entries()) {
       item.known = known; item.sort = result.sort; item.showSort = index === 0;
+      item.channelThumbnailPath = videos.get(item.video_id)?.metadata_channel_thumbnail_path || '';
     }
     return result;
   }

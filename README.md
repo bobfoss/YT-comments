@@ -40,8 +40,9 @@ One card represents one thread and always includes every captured comment by
 the participant. Search includes comment IDs and thread IDs as well as text
 and author names. Other comments in that thread are searchable too; a matching
 reply is previewed when necessary. Replies are collapsed initially. Known
-library profile images are reused; unknown profiles use an initial. Author
-labels use the observed alias/name, falling back to the channel ID.
+library profile images are reused; unknown profiles use an initial. Each card's
+video title is preceded by the uploader's cached profile thumbnail when known.
+Author labels use the observed alias/name, falling back to the channel ID.
 
 The **Comment order** selector persists in the plugin configuration. Newest
 and oldest refer to account participation timestamps from My Activity; most
