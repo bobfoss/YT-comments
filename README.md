@@ -37,7 +37,8 @@ captured participating threads; pending history references do not count yet.
 Selecting **no comments** excludes the separate thread cards. Parent and child
 selections use the shared video-filter controls and persist across reloads.
 One card represents one thread and always includes every captured comment by
-the participant. Other comments in that thread are searchable too; a matching
+the participant. Search includes comment IDs and thread IDs as well as text
+and author names. Other comments in that thread are searchable too; a matching
 reply is previewed when necessary. Replies are collapsed initially. Known
 library profile images are reused; unknown profiles use an initial. Author
 labels use the observed alias/name, falling back to the channel ID.
@@ -58,8 +59,9 @@ coverage visible.
 
 Default thread refresh age is 24 hours. Explicit **Refresh comments** bypasses
 the age threshold. Each thread capture has a 500-page bound and records partial
-coverage when exhausted. Schema version 1 is initialized locally; future
-versions must add ordered migrations and preserve captured content.
+coverage when exhausted. Schema version 2 adds comment and thread IDs to the
+search index. Existing version 1 databases upgrade in place and rebuild that
+index from captured comments, without refetching threads or changing content.
 
 Verification:
 

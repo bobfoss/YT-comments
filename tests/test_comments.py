@@ -127,6 +127,57 @@ class PersistenceTests(unittest.TestCase):
         context, _ = AcquisitionTests().fixture()
         return capture_thread(context, "abcdefghijk", "root", lambda: False)
 
+    def capture_with_ids(self) -> dict:
+        result = self.capture()
+        thread_id = "UgwSearch_Example-Comment01"
+        result["thread_id"] = thread_id
+        for row in result["comments"]:
+            row["comment_id"] = row["comment_id"].replace("root", thread_id, 1)
+            row["parent_id"] = row["parent_id"].replace("root", thread_id, 1)
+        return result
+
+    def test_comment_and_reply_ids_return_the_participating_thread(self):
+        result = self.capture_with_ids()
+        plugin = YTCommentsPlugin()
+        plugin.db_path = self.path
+        with connection(self.path) as conn:
+            store_capture(conn, result)
+            for row in result["comments"]:
+                with self.subTest(comment_id=row["comment_id"]):
+                    hits = search(conn, row["comment_id"], 10, 0, "newest")
+                    self.assertEqual(hits["total"], 1)
+                    self.assertEqual(hits["results"][0]["thread_id"], result["thread_id"])
+                    self.assertEqual(len(hits["results"][0]["own_comments"]), 1)
+            self.assertEqual(search(conn, "UgwUnknown_ID-00000", 10, 0, "newest")["total"], 0)
+        for row in result["comments"]:
+            self.assertEqual(plugin.filter_videos(row["comment_id"])["search_match_ids"], frozenset({"abcdefghijk"}))
+
+    def test_v1_upgrade_preserves_content_and_indexes_existing_ids(self):
+        legacy_path = Path(self.temp.name) / "legacy.sqlite3"
+        result = self.capture_with_ids()
+        tables = ("settings", "history_refs", "threads", "comments")
+        with connection(legacy_path) as conn:
+            conn.executescript((Path(__file__).parent / "fixtures/schema_v1.sql").read_text(encoding="utf-8"))
+            store_refs(conn, [ref(result["comments"][1]["comment_id"])])
+            store_capture(conn, result)
+            before = {table: [tuple(row) for row in conn.execute(f"SELECT rowid,* FROM {table} ORDER BY rowid")]
+                      for table in tables}
+            self.assertEqual(search(conn, result["thread_id"], 10, 0, "newest")["total"], 0)
+        initialize(legacy_path)
+        initialize(legacy_path)
+        with connection(legacy_path) as conn:
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 2)
+            for table in tables:
+                self.assertEqual([tuple(row) for row in conn.execute(f"SELECT rowid,* FROM {table} ORDER BY rowid")], before[table])
+            for row in result["comments"]:
+                self.assertEqual(search(conn, row["comment_id"], 10, 0, "newest")["total"], 1)
+            result["comments"][1]["text"] = "migration updated content"
+            removed_id = result["comments"].pop()["comment_id"]
+            store_capture(conn, result)
+            self.assertEqual(search(conn, "migration updated", 10, 0, "newest")["total"], 1)
+            self.assertEqual(search(conn, removed_id, 10, 0, "newest")["total"], 0)
+            conn.execute("INSERT INTO comments_fts(comments_fts,rank) VALUES('integrity-check',1)")
+
     def test_bootstrap_idempotent_and_search_groups_all_own_comments(self):
         result = self.capture()
         second = dict(result["comments"][1], comment_id="root.own2", text="another contribution")
@@ -185,7 +236,7 @@ class PersistenceTests(unittest.TestCase):
 
     def test_unknown_newer_schema_refused(self):
         with connection(self.path) as conn:
-            conn.execute("PRAGMA user_version=2")
+            conn.execute("PRAGMA user_version=3")
         with self.assertRaises(RuntimeError):
             initialize(self.path)
 

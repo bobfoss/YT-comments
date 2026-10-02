@@ -26,9 +26,12 @@ def initialize(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connection(path) as conn:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version > 1:
+        if version > 2:
             raise RuntimeError("YT Comments database requires a newer plugin")
+        if version == 2:
+            return
         if version == 1:
+            _migrate_v2(conn)
             return
         conn.executescript("""
             PRAGMA journal_mode=WAL;
@@ -62,6 +65,37 @@ def initialize(path: Path) -> None:
             END;
             PRAGMA user_version=1;
         """)
+        _migrate_v2(conn)
+
+
+def _migrate_v2(conn: sqlite3.Connection) -> None:
+    conn.executescript("""
+        BEGIN IMMEDIATE;
+        DROP TRIGGER comments_ai;
+        DROP TRIGGER comments_ad;
+        DROP TRIGGER comments_au;
+        DROP TABLE comments_fts;
+        CREATE VIRTUAL TABLE comments_fts USING fts5(
+            text, author_name, comment_id, thread_id,
+            content='comments', content_rowid='rowid', tokenize='unicode61');
+        CREATE TRIGGER comments_ai AFTER INSERT ON comments BEGIN
+            INSERT INTO comments_fts(rowid,text,author_name,comment_id,thread_id)
+            VALUES(new.rowid,new.text,new.author_name,new.comment_id,new.thread_id);
+        END;
+        CREATE TRIGGER comments_ad AFTER DELETE ON comments BEGIN
+            INSERT INTO comments_fts(comments_fts,rowid,text,author_name,comment_id,thread_id)
+            VALUES('delete',old.rowid,old.text,old.author_name,old.comment_id,old.thread_id);
+        END;
+        CREATE TRIGGER comments_au AFTER UPDATE ON comments BEGIN
+            INSERT INTO comments_fts(comments_fts,rowid,text,author_name,comment_id,thread_id)
+            VALUES('delete',old.rowid,old.text,old.author_name,old.comment_id,old.thread_id);
+            INSERT INTO comments_fts(rowid,text,author_name,comment_id,thread_id)
+            VALUES(new.rowid,new.text,new.author_name,new.comment_id,new.thread_id);
+        END;
+        INSERT INTO comments_fts(comments_fts) VALUES('rebuild');
+        PRAGMA user_version=2;
+        COMMIT;
+    """)
 
 
 def setting(conn: sqlite3.Connection, key: str) -> str:
