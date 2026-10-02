@@ -20,7 +20,7 @@ class YTCommentsPlugin:
     plugin_name = "YT Comments"
     plugin_version = __version__
     plugin_api_version = 2
-    required_host_features = {"youtube_next_session_v1", "my_activity_session_v1", "worker_followup_v1", "video_discovery_v1"}
+    required_host_features = {"youtube_next_session_v1", "my_activity_session_v1", "worker_followup_v1", "video_discovery_v1", "video_facet_result_cards_v1"}
     capabilities = {"comment_search", "comment_threads", "comment_presence", "worker_processes"}
     browser_assets = ({"path": "browser.js", "type": "script"}, {"path": "browser.css", "type": "style"})
 
@@ -142,6 +142,19 @@ class YTCommentsPlugin:
             set_setting(conn, "history_checked_at", utc_now())
         planned = runtime.enqueue_process("fetch", {})
         return {"outcome": "complete", "found": total_new, "processed": pages, "message": f"Indexed history; follow-up plan: {planned.get('queued', planned.get('inserted', 0))}"}
+
+    def filter_videos(self, query: str) -> dict[str, frozenset[str]]:
+        with connection(self.db_path) as conn:
+            participating = "EXISTS(SELECT 1 FROM comments own WHERE own.thread_id=t.thread_id AND own.is_current_user=1)"
+            video_ids = frozenset(row[0] for row in conn.execute(
+                f"SELECT DISTINCT video_id FROM threads t WHERE {participating}"))
+            fts = " AND ".join('"' + word.replace('"', '""') + '"' for word in query.strip().split())
+            matches = frozenset(row[0] for row in conn.execute(f"""
+                SELECT DISTINCT t.video_id FROM comments_fts f
+                JOIN comments c ON c.rowid=f.rowid JOIN threads t ON t.thread_id=c.thread_id
+                WHERE comments_fts MATCH ? AND {participating}
+            """, (fts,))) if fts else frozenset()
+        return {"video_ids": video_ids, "search_match_ids": matches}
 
     def handle_api(self, method: str, path: str, query: dict[str, list[str]]):
         if method != "GET":

@@ -201,6 +201,21 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual([task["subject_id"] for task in tasks], ["root"])
         context.library_videos.assert_not_called()
 
+    def test_video_filter_counts_only_captured_participation_and_searches_context(self):
+        plugin = YTCommentsPlugin()
+        plugin.db_path = self.path
+        result = self.capture()
+        result["comments"][0]["text"] = "distinct conversation context"
+        with connection(self.path) as conn:
+            store_refs(conn, [ref(), ref("pending", "ABCDEFGHIJK")])
+            store_capture(conn, result)
+            mark_error(conn, "root", "temporary error")
+        presence = plugin.filter_videos("")
+        self.assertEqual(presence["video_ids"], frozenset({"abcdefghijk"}))
+        self.assertFalse(presence["search_match_ids"])
+        self.assertEqual(plugin.filter_videos("distinct context")["search_match_ids"], presence["video_ids"])
+        self.assertFalse(plugin.filter_videos("notpresent")["search_match_ids"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,7 +31,11 @@ error and preserves existing data. Google and YouTube cookie exports should
 belong to the same account. Cookie ownership, proxy settings, pacing, and queue
 operations remain in YTL. No cookies or profile images are stored by YTC.
 
-Search has a **Comments** result kind and **Search in → Comments** field.
+Search has a **Videos → Comments** filter with **comments** and **no comments**
+children, plus a **Search in → Comments** field. Counts represent videos with
+captured participating threads; pending history references do not count yet.
+Selecting **no comments** excludes the separate thread cards. Parent and child
+selections use the shared video-filter controls and persist across reloads.
 One card represents one thread and always includes every captured comment by
 the participant. Other comments in that thread are searchable too; a matching
 reply is previewed when necessary. Replies are collapsed initially. Known

@@ -173,8 +173,14 @@
   api.register({
     id: 'comments',
     search: {
-      capability: 'comment_search', label: 'Comments', preferenceKey: 'plugins.comments.search', fetchEmptyQuery: true,
-      searchField: {key: 'comments', label: 'Comments', defaultEnabled: true, appliesToKinds: ['comments']},
+      capability: 'comment_search', label: 'Comments', fetchEmptyQuery: true, separateResults: true,
+      searchField: {key: 'comments', label: 'Comments', defaultEnabled: true, appliesToKinds: ['videos']},
+      videoFacet: {
+        presentLabel: 'comments', absentLabel: 'no comments',
+        presentHashParam: 'with-comments', absentHashParam: 'without-comments',
+        presentDisabledPreferenceKey: 'plugins.comments.filters.hide_present',
+        absentDisabledPreferenceKey: 'plugins.comments.filters.hide_absent',
+      },
       catalogCount: status => Number(status?.pluginStatus?.threads || 0),
       fetch: fetchResults,
       renderResult: (item, host) => threadCard(item, host, item.known),
