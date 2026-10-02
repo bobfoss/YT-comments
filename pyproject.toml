@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-comments"
+version = "0.1.0"
+description = "Participating YouTube comment threads for YT Library"
+requires-python = ">=3.11"
+
+[project.entry-points."yt_library.plugins"]
+comments = "yt_comments.plugin:YTCommentsPlugin"
+
+[tool.setuptools.package-data]
+yt_comments = ["*.js", "*.css"]
+
+[tool.ruff.lint]
+select = ["F"]
