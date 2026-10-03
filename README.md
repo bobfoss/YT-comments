@@ -1,5 +1,10 @@
 # YT Comments (YTC)
 
+Licensed under the GNU General Public License, version 3 or (at your option)
+any later version (`GPL-3.0-or-later`). See [LICENSE](LICENSE). Distributed
+without any warranty; see the license for details. Third-party dependencies
+retain their own licenses.
+
 Optional Python plugin for YT Library API v2. Discovers comment participation
 through the configured Google My Activity session and captures full participating
 threads through authenticated YouTube watch-page continuations. It never scans
