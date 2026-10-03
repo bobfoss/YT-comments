@@ -51,10 +51,18 @@ thread. Individual counts remain visible. The global native-result sort does
 not control this independent result type.
 
 Exact My Activity timestamps are stored in UTC and displayed with YTL's
-configured timezone. Relative YouTube date labels remain observations, with
-the capture date in their tooltip. Rounded counts remain labels unless YouTube
-also supplies an exact accessibility count. A failed or partial capture never
-erases saved comments. A complete capture replaces the thread's current comment
+configured timezone. Comments without an exact timestamp keep relative ages,
+anchored to their saved YouTube label and capture time. They advance as time
+passes, including once per minute while the page is open and when returning to
+the tab, without a rescan. Month and year ages use calendar subtraction;
+rounded ages remain approximate. Unsupported labels display their capture time
+alongside the original text. Tooltips retain the original
+label and capture time, and **(edited)** is shown whenever YouTube reported it,
+including beside exact My Activity dates. Existing captures gain this display
+without a migration or refetch; estimates never replace exact timestamps.
+Rounded counts remain labels unless YouTube also supplies an exact accessibility
+count. A failed or partial capture never erases saved comments. A complete capture
+replaces the thread's current comment
 set. Capture status and reported-versus-captured reply counts make incomplete
 coverage visible.
 
@@ -71,6 +79,9 @@ $python = '..\YT Library\.venv\Scripts\python.exe'
 & $python -m unittest discover -s tests -v
 & $python -m ruff check .
 ```
+
+Run `tests/js/comment-dates.test.js` with Node's `--test` runner to check relative
+clock advancement, tab return, month boundaries, and edited date rendering.
 
 The retrieval protocol was investigated using YouTube Comment Reader 1.0.33;
 this plugin is an independent Python implementation, not bundled extension code.

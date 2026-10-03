@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .acquisition import utc_now
+from .dates import comment_date_fields
 
 
 @contextmanager
@@ -171,6 +172,8 @@ def thread_payload(conn: sqlite3.Connection, thread_id: str, *, full: bool = Fal
     result = dict(thread)
     comments = [dict(row) for row in conn.execute(
         "SELECT * FROM comments WHERE thread_id=? ORDER BY position,comment_id", (thread_id,))]
+    for row in comments:
+        row.update(comment_date_fields(row))
     result["own_comments"] = [row for row in comments if row["is_current_user"]]
     if not result["own_comments"]:
         return None

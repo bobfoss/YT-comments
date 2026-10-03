@@ -27,6 +27,51 @@
     return host.libraryChannels(ids).catch(() => new Map());
   }
 
+  function relativeTime(value, now = Date.now()) {
+    const published = new Date(value);
+    const current = new Date(now);
+    const seconds = Math.max(0, Math.floor((current - published) / 1000));
+    if (!Number.isFinite(seconds)) return 'Date unknown';
+    if (!seconds) return 'just now';
+    let months = (current.getUTCFullYear() - published.getUTCFullYear()) * 12
+      + current.getUTCMonth() - published.getUTCMonth();
+    const anniversary = new Date(published);
+    const lastDay = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).getUTCDate();
+    anniversary.setUTCFullYear(current.getUTCFullYear(), current.getUTCMonth(), Math.min(published.getUTCDate(), lastDay));
+    if (current < anniversary) --months;
+    const formatter = new Intl.RelativeTimeFormat(undefined, {numeric: 'always'});
+    if (months >= 12) return formatter.format(-Math.floor(months / 12), 'year');
+    if (months >= 1) return formatter.format(-months, 'month');
+    for (const [unit, duration] of [['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]]) {
+      if (seconds >= duration) return formatter.format(-Math.floor(seconds / duration), unit);
+    }
+  }
+
+  function updateRelativeTimes() {
+    for (const node of document.querySelectorAll('.ytc-time[data-estimated-posted-at]')) {
+      node.textContent = relativeTime(node.dataset.estimatedPostedAt) + (node.dataset.edited === '1' ? ' (edited)' : '');
+    }
+  }
+  setInterval(updateRelativeTimes, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) updateRelativeTimes(); });
+
+  function commentDate(row, host) {
+    const captured = host.ui.formatTime(row.last_seen);
+    const source = row.published_label || '';
+    const label = source.replace(/\s*\(edited\)\s*$/i, '').trim();
+    let text;
+    if (row.posted_at) text = host.ui.formatTime(row.posted_at);
+    else if (row.estimated_posted_at) {
+      text = relativeTime(row.estimated_posted_at);
+    } else {
+      text = label ? `${label}${captured ? ` (as of ${captured})` : ''}` : 'Date unknown';
+    }
+    if (row.is_edited) text += ' (edited)';
+    const evidence = source ? ` · YouTube label: ${source}` : '';
+    const estimate = row.estimated_posted_at ? ' · Approximate age, advanced from the label at capture time' : '';
+    return {text, title: `Open comment on YouTube · Last captured ${captured}${evidence}${estimate}`};
+  }
+
   function commentRow(row, videoId, known, query, host) {
     const block = element('div', 'ytc-comment');
     block.dataset.commentId = row.comment_id;
@@ -45,11 +90,15 @@
     const author = element('a', 'ytc-author', name);
     author.href = `https://www.youtube.com/channel/${encodeURIComponent(row.author_id)}`;
     author.target = '_blank'; author.rel = 'noreferrer';
-    const timestamp = element('a', 'ytc-time', row.posted_at
-      ? host.ui.formatTime(row.posted_at) : row.published_label || 'Date unknown');
+    const date = commentDate(row, host);
+    const timestamp = element('a', 'ytc-time', date.text);
     timestamp.href = sourceUrl(videoId, row.comment_id);
     timestamp.target = '_blank'; timestamp.rel = 'noreferrer';
-    timestamp.title = `Open comment on YouTube · Last captured ${host.ui.formatTime(row.last_seen)}`;
+    timestamp.title = date.title;
+    if (!row.posted_at && row.estimated_posted_at) {
+      timestamp.dataset.estimatedPostedAt = row.estimated_posted_at;
+      timestamp.dataset.edited = row.is_edited ? '1' : '0';
+    }
     header.append(author, timestamp);
     const text = element('div', 'ytc-text');
     highlighted(text, row.text, query);

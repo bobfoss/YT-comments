@@ -16,7 +16,9 @@ Backfill only threads discovered in My Activity, then update incrementally and
 alongside video metadata. Use host queues, cookies, proxy, pacing and discovery
 services. Keep authentication mismatch, incomplete capture and unavailable
 threads distinct; failed checks must not erase useful content. Exact timestamps
-are UTC; relative source labels must not become invented exact instants.
+are UTC. Retain relative source labels and capture times; derive advancing
+relative ages separately from exact My Activity timestamps and identify their
+approximation in the tooltip. Preserve YouTube's edited marker in both displays.
 
 Preserve unrelated work, commit coherent verified milestones with substantive
 bodies, and push only on request. Keep personal data and configuration out of Git.

@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from yt_comments.acquisition import CaptureInterrupted, capture_thread, count_value, history_bootstrap, history_next
+from yt_comments.acquisition import CaptureInterrupted, capture_thread, count_value, history_bootstrap, history_next, parse_comments
 from yt_comments.database import connection, initialize, mark_error, search, store_capture, store_refs, thread_payload
 from yt_comments.plugin import YTCommentsPlugin
 
@@ -115,6 +115,15 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual(count_value("12,345 likes"), 12345)
         self.assertEqual(count_value("0"), 0)
 
+    def test_both_comment_formats_preserve_the_edited_source_label(self):
+        modern = entity("modern", own=True)
+        modern["commentEntityPayload"]["properties"]["publishedTime"] = "5 months ago (edited)"
+        legacy = {"commentRenderer": {"commentId": "legacy", "publishedTimeText": {
+            "runs": [{"text": "5 months ago"}, {"text": " (edited)"}]}}}
+        rows = parse_comments({"comments": [modern, legacy]})
+        self.assertEqual(rows["modern"]["published_label"], "5 months ago (edited)")
+        self.assertEqual(rows["legacy"]["published_label"], "5 months ago (edited)")
+
 
 class PersistenceTests(unittest.TestCase):
     def setUp(self):
@@ -221,6 +230,24 @@ class PersistenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "changed"):
             with connection(self.path) as conn:
                 store_capture(conn, result)
+
+    def test_existing_capture_exposes_estimates_and_edits_without_rewriting_evidence(self):
+        result = self.capture()
+        result["comments"][0]["published_label"] = "5 months ago"
+        result["comments"][1]["published_label"] = "5 months ago (edited)"
+        with connection(self.path) as conn:
+            store_refs(conn, [ref()])
+            store_capture(conn, result)
+            conn.execute("UPDATE comments SET last_seen='2026-10-02T07:51:54Z'")
+            before = [tuple(row) for row in conn.execute("SELECT * FROM comments ORDER BY comment_id")]
+            for payload in (thread_payload(conn, "root", full=True), search(conn, "", 10, 0, "newest")["results"][0]):
+                self.assertEqual(payload["root_comment"]["estimated_posted_at"], "2026-05-02T07:51:54Z")
+                self.assertIsNone(payload["root_comment"]["posted_at"])
+                own = payload["own_comments"][0]
+                self.assertTrue(own["is_edited"])
+                self.assertEqual(own["posted_at"], ref()["posted_at"])
+                self.assertIsNone(own["estimated_posted_at"])
+            self.assertEqual([tuple(row) for row in conn.execute("SELECT * FROM comments ORDER BY comment_id")], before)
 
     def test_complete_refresh_removes_missing_comments_from_search(self):
         result = self.capture()
