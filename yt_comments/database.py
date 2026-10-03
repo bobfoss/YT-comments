@@ -8,13 +8,14 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .acquisition import utc_now
-from .dates import comment_date_fields
+from .dates import approximate_posted_at, comment_date_fields
 
 
 @contextmanager
 def connection(path: Path) -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.create_function("approximate_posted_at", 2, approximate_posted_at, deterministic=True)
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         with conn:
@@ -184,7 +185,9 @@ def thread_payload(conn: sqlite3.Connection, thread_id: str, *, full: bool = Fal
     return result
 
 
-def search(conn: sqlite3.Connection, query: str, limit: int, offset: int, sort: str, video_id: str = "") -> dict[str, Any]:
+def search_descriptors(conn: sqlite3.Connection, query: str, video_id: str = "") -> list[dict[str, Any]]:
+    if not query.strip() and not video_id:
+        return []
     conditions = ["EXISTS(SELECT 1 FROM comments c WHERE c.thread_id=t.thread_id AND c.is_current_user=1)"]
     params: list[Any] = []
     if video_id:
@@ -196,17 +199,43 @@ def search(conn: sqlite3.Connection, query: str, limit: int, offset: int, sort: 
         conditions.append("t.thread_id IN (SELECT c.thread_id FROM comments_fts f JOIN comments c ON c.rowid=f.rowid WHERE comments_fts MATCH ?)")
         params.append(fts)
     where = " AND ".join(conditions)
-    order = {"oldest": "t.last_activity_at ASC", "likes": "(SELECT MAX(like_count) FROM comments c WHERE c.thread_id=t.thread_id AND c.is_current_user=1) DESC"}.get(sort, "t.last_activity_at DESC")
-    total = conn.execute(f"SELECT COUNT(*) FROM threads t WHERE {where}", params).fetchone()[0]
-    results = []
-    for row in conn.execute(f"SELECT t.thread_id FROM threads t WHERE {where} ORDER BY {order},t.thread_id LIMIT ? OFFSET ?", (*params, limit, offset)):
-        item = thread_payload(conn, row[0])
+    return [dict(row) for row in conn.execute(f"""
+        SELECT t.thread_id AS id,t.video_id,t.title,
+               MIN(COALESCE(NULLIF(c.posted_at,''),NULLIF(r.posted_at,''),
+                   approximate_posted_at(c.published_label,c.last_seen))) AS oldest_at,
+               MAX(COALESCE(NULLIF(c.posted_at,''),NULLIF(r.posted_at,''),
+                   approximate_posted_at(c.published_label,c.last_seen))) AS newest_at,
+               MAX(c.like_count) AS like_count
+        FROM threads t JOIN comments c ON c.thread_id=t.thread_id AND c.is_current_user=1
+        LEFT JOIN history_refs r ON r.comment_id=c.comment_id
+        WHERE {where} GROUP BY t.thread_id ORDER BY t.thread_id
+    """, params)]
+
+
+def search_items(conn: sqlite3.Connection, ids: list[str], query: str) -> dict[str, dict[str, Any]]:
+    fts = " AND ".join('"' + word.replace('"', '""') + '"' for word in query.strip().split())
+    results = {}
+    for thread_id in ids:
+        item = thread_payload(conn, thread_id)
         if item:
             if fts:
                 match = conn.execute("""SELECT c.author_name,c.text,c.is_current_user FROM comments_fts f
                     JOIN comments c ON c.rowid=f.rowid WHERE comments_fts MATCH ? AND c.thread_id=?
-                    ORDER BY c.is_current_user DESC,c.position LIMIT 1""", (fts, row[0])).fetchone()
+                    ORDER BY c.is_current_user DESC,c.position LIMIT 1""", (fts, thread_id)).fetchone()
                 item["match"] = dict(match) if match else None
             item["query"] = query
-            results.append(item)
-    return {"total": total, "totalIsExact": True, "results": results}
+            results[thread_id] = item
+    return results
+
+
+def search(conn: sqlite3.Connection, query: str, limit: int, offset: int, sort: str, video_id: str = "") -> dict[str, Any]:
+    descriptors = search_descriptors(conn, query, video_id)
+    if sort in {"likes", "most_liked"}:
+        descriptors.sort(key=lambda row: -(row["like_count"] if row["like_count"] is not None else -1))
+    elif sort == "oldest":
+        descriptors.sort(key=lambda row: (row["oldest_at"] is None, row["oldest_at"] or ""))
+    else:
+        descriptors.sort(key=lambda row: row["newest_at"] or "", reverse=True)
+    ids = [row["id"] for row in descriptors[offset:offset + limit]]
+    items = search_items(conn, ids, query)
+    return {"total": len(descriptors), "totalIsExact": True, "results": [items[key] for key in ids if key in items]}

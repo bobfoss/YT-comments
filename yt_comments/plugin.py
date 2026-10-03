@@ -12,7 +12,7 @@ from typing import Any
 
 from . import __version__
 from .acquisition import CaptureInterrupted, capture_thread, history_bootstrap, history_next, utc_now
-from .database import connection, initialize, mark_error, search, set_setting, setting, store_capture, store_refs, thread_payload
+from .database import connection, initialize, mark_error, search, search_descriptors, search_items, set_setting, setting, store_capture, store_refs, thread_payload
 
 
 class YTCommentsPlugin:
@@ -20,7 +20,7 @@ class YTCommentsPlugin:
     plugin_name = "YT Comments"
     plugin_version = __version__
     plugin_api_version = 2
-    required_host_features = {"youtube_next_session_v1", "my_activity_session_v1", "worker_followup_v1", "video_discovery_v1", "video_facet_result_cards_v1"}
+    required_host_features = {"youtube_next_session_v1", "my_activity_session_v1", "worker_followup_v1", "video_discovery_v1", "video_facet_result_cards_v1", "unified_search_cards_v1"}
     capabilities = {"comment_search", "comment_threads", "comment_presence", "worker_processes"}
     browser_assets = ({"path": "browser.js", "type": "script"}, {"path": "browser.css", "type": "style"})
 
@@ -163,8 +163,7 @@ class YTCommentsPlugin:
         with connection(self.db_path) as conn:
             if path == "search":
                 result = search(conn, value("q"), min(5000, max(1, int(value("limit", "30")))), max(0, int(value("offset", "0"))),
-                                str(self.config["sort"]), value("video_id"))
-                result["sort"] = self.config["sort"]
+                                value("sort", "newest"), value("video_id"))
                 return 200, result
             if path.startswith("threads/"):
                 result = thread_payload(conn, path.split("/", 1)[1], full=True)
@@ -181,6 +180,14 @@ class YTCommentsPlugin:
             if path == "preferences":
                 return 200, {"sort": self.config["sort"]}
         return None
+
+    def search_result_descriptors(self, query: str) -> list[dict[str, Any]]:
+        with connection(self.db_path) as conn:
+            return search_descriptors(conn, query)
+
+    def hydrate_search_results(self, ids: list[str], query: str) -> dict[str, dict[str, Any]]:
+        with connection(self.db_path) as conn:
+            return search_items(conn, ids, query)
 
     def handle_api_request(self, method: str, path: str, query: dict[str, list[str]], body: dict[str, Any]):
         if method == "POST" and path == "preferences":

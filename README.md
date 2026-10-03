@@ -36,7 +36,8 @@ children, plus a **Search in → Comments** field. Counts represent videos with
 captured participating threads; pending history references do not count yet.
 Selecting **no comments** excludes the separate thread cards. Parent and child
 selections use the shared video-filter controls and persist across reloads.
-One card represents one thread and always includes every captured comment by
+Comment cards appear only for a nonblank matching search. One card represents
+one thread and always includes every captured comment by
 the participant. Search includes comment IDs and thread IDs as well as text
 and author names. Other comments in that thread are searchable too; a matching
 reply is previewed when necessary. Replies are collapsed initially. Known
@@ -44,11 +45,16 @@ library profile images are reused; unknown profiles use an initial. Each card's
 video title is preceded by the uploader's cached profile thumbnail when known.
 Author labels use the observed alias/name, falling back to the channel ID.
 
-The **Comment order** selector persists in the plugin configuration. Newest
-and oldest refer to account participation timestamps from My Activity; most
-liked orders by the largest like count among the participant's comments in a
-thread. Individual counts remain visible. The global native-result sort does
-not control this independent result type.
+Comment cards share the main search **Sort** control and are sorted together
+with native results before pagination. **Newest** uses the participant's latest
+comment date in the thread; **Oldest** uses their earliest. Exact My Activity
+timestamps take priority over capture-anchored estimates when a comment lacks
+an exact date. Other authors' dates do not affect the thread's order.
+**Most liked** appears in the main sort choices when comment matches exist;
+it uses the largest known like count among the participant's comments in each
+thread. Results without a known like count follow those with counts. Sorting
+preferences persist through YTL's shared controls. Video detail panels still
+list the video's threads when their local comment search is empty.
 
 Exact My Activity timestamps are stored in UTC and displayed with YTL's
 configured timezone. Comments without an exact timestamp keep relative ages,

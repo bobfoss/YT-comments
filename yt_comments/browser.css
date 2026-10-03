@@ -19,10 +19,8 @@
 .ytc-decorator { display: inline-flex; gap: 4px; align-items: center; }
 .ytc-decorator svg { flex: 0 0 14px; }
 .ytc-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0; }
-.ytc-controls input, .ytc-sort select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 6px 8px; }
+.ytc-controls input { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 6px 8px; }
 .ytc-controls input { width: 240px; max-width: 100%; min-width: 0; font: inherit; }
-.ytc-sort { display: inline-flex; align-items: center; gap: 5px; }
-.ytc-sort select { max-width: 240px; font: inherit; }
 .ytc-thread-list { display: grid; gap: 12px; }
 .ytc-match { border-left: 2px solid var(--line); padding-left: 10px; margin: 10px 0; }
 .ytc-capture-state { margin-top: 12px; }

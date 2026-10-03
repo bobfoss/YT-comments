@@ -2,8 +2,6 @@
   'use strict';
   const api = window.YTLibraryBrowserPlugins;
   if (!api || api.apiVersion !== 2) return;
-  let preferenceWrites = Promise.resolve();
-  let preferenceRevision = 0;
   const element = (tag, className, text = '') => {
     const node = document.createElement(tag);
     node.className = className;
@@ -108,33 +106,11 @@
     return block;
   }
 
-  function sortControl(sort, host, refresh) {
-    const label = element('label', 'ytc-sort details', 'Comment order ');
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', 'Comment order');
-    for (const [value, text] of [['newest', 'Newest participation'], ['oldest', 'Oldest participation'], ['likes', 'Most liked participation']]) {
-      const option = element('option', '', text); option.value = value; select.append(option);
-    }
-    select.value = sort;
-    const status = element('span', 'ytc-save-status');
-    select.addEventListener('change', () => {
-      const value = select.value;
-      const revision = ++preferenceRevision;
-      preferenceWrites = preferenceWrites.catch(() => {}).then(() => host.postJson('preferences', { sort: value }));
-      preferenceWrites.then(async () => {
-        if (revision === preferenceRevision) await refresh();
-      }).catch(error => { if (revision === preferenceRevision) status.textContent = error.message; });
-    });
-    label.append(select, status);
-    return label;
-  }
-
   function threadCard(item, host, known = new Map()) {
     const card = element('article', 'card ytc-card');
     card.dataset.threadId = item.thread_id;
     const body = element('div', 'body');
     body.append(element('div', 'details', 'Comments'));
-    if (item.showSort) body.append(sortControl(item.sort, host, () => host.refreshSearch()));
     const title = element('a', 'video-title creator-chip');
     title.href = host.ui.localVideoHref(item.video_id);
     if (item.channelThumbnailPath) {
@@ -187,16 +163,20 @@
 
   async function fetchResults({ query, limit, offset }, host, videoId = '') {
     const result = await host.requestJson('search', { q: query, limit, offset, video_id: videoId });
-    const rows = result.results.flatMap(item => [...item.own_comments, ...(item.root_comment ? [item.root_comment] : [])]);
+    await prepareResults(result.results, host);
+    return result;
+  }
+
+  async function prepareResults(items, host) {
+    const rows = items.flatMap(item => [...item.own_comments, ...(item.root_comment ? [item.root_comment] : [])]);
     const [known, videos] = await Promise.all([
       profiles(rows, host),
-      host.libraryVideos(result.results.map(item => item.video_id)).catch(() => new Map()),
+      host.libraryVideos(items.map(item => item.video_id)).catch(() => new Map()),
     ]);
-    for (const [index, item] of result.results.entries()) {
-      item.known = known; item.sort = result.sort; item.showSort = index === 0;
+    for (const item of items) {
+      item.known = known;
       item.channelThumbnailPath = videos.get(item.video_id)?.metadata_channel_thumbnail_path || '';
     }
-    return result;
   }
 
   async function videoPanel(videoId, host) {
@@ -216,15 +196,13 @@
         const result = await fetchResults({query: input.value, limit: 20, offset}, host, videoId);
         if (revision !== generation) return;
         if (reset) rows.replaceChildren();
-        for (const item of result.results) { item.showSort = false; rows.append(threadCard(item, host, item.known)); }
+        for (const item of result.results) rows.append(threadCard(item, host, item.known));
         offset += result.results.length; total = result.total;
         message.textContent = total ? `${total} participating ${total === 1 ? 'thread' : 'threads'}` : 'No captured participating threads.';
         more.hidden = offset >= total;
       } catch (error) { if (revision === generation) message.textContent = error.message; }
       finally { if (revision === generation) busy = false; }
     }
-    const pref = await host.requestJson('preferences');
-    controls.append(sortControl(pref.sort, host, () => load()));
     input.addEventListener('input', () => { ++generation; clearTimeout(timer); timer = setTimeout(() => load(), 180); });
     more.addEventListener('click', () => { if (!busy) load(false); });
     await load();
@@ -234,7 +212,8 @@
   api.register({
     id: 'comments',
     search: {
-      capability: 'comment_search', label: 'Comments', fetchEmptyQuery: true, separateResults: true,
+      capability: 'comment_search', label: 'Comments', serverResults: true,
+      sortOptions: [{value: 'most_liked', label: 'Most liked'}],
       searchField: {key: 'comments', label: 'Comments', defaultEnabled: true, appliesToKinds: ['videos']},
       videoFacet: {
         presentLabel: 'comments', absentLabel: 'no comments',
@@ -243,7 +222,7 @@
         absentDisabledPreferenceKey: 'plugins.comments.filters.hide_absent',
       },
       catalogCount: status => Number(status?.pluginStatus?.threads || 0),
-      fetch: fetchResults,
+      prepareResults,
       renderResult: (item, host) => threadCard(item, host, item.known),
     },
     videoDetail: {capability: 'comment_threads', render: videoPanel},

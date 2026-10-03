@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from yt_comments.acquisition import CaptureInterrupted, capture_thread, count_value, history_bootstrap, history_next, parse_comments
-from yt_comments.database import connection, initialize, mark_error, search, store_capture, store_refs, thread_payload
+from yt_comments.database import connection, initialize, mark_error, search, search_descriptors, store_capture, store_refs, thread_payload
 from yt_comments.plugin import YTCommentsPlugin
 
 
@@ -240,7 +240,7 @@ class PersistenceTests(unittest.TestCase):
             store_capture(conn, result)
             conn.execute("UPDATE comments SET last_seen='2026-10-02T07:51:54Z'")
             before = [tuple(row) for row in conn.execute("SELECT * FROM comments ORDER BY comment_id")]
-            for payload in (thread_payload(conn, "root", full=True), search(conn, "", 10, 0, "newest")["results"][0]):
+            for payload in (thread_payload(conn, "root", full=True), search(conn, "hello", 10, 0, "newest")["results"][0]):
                 self.assertEqual(payload["root_comment"]["estimated_posted_at"], "2026-05-02T07:51:54Z")
                 self.assertIsNone(payload["root_comment"]["posted_at"])
                 own = payload["own_comments"][0]
@@ -293,6 +293,50 @@ class PersistenceTests(unittest.TestCase):
         self.assertFalse(presence["search_match_ids"])
         self.assertEqual(plugin.filter_videos("distinct context")["search_match_ids"], presence["video_ids"])
         self.assertFalse(plugin.filter_videos("notpresent")["search_match_ids"])
+
+    def test_blank_global_search_omits_cards_but_video_panel_can_list_threads(self):
+        with connection(self.path) as conn:
+            store_capture(conn, self.capture())
+            for query in ("", "  \t"):
+                self.assertEqual(search(conn, query, 10, 0, "newest")["total"], 0)
+                self.assertEqual(search_descriptors(conn, query), [])
+            self.assertEqual(search(conn, "", 10, 0, "newest", "abcdefghijk")["total"], 1)
+            self.assertEqual(search(conn, "nomatch", 10, 0, "newest")["total"], 0)
+
+    def test_thread_sorts_use_all_own_dates_and_likes_not_other_authors_or_discovery(self):
+        with connection(self.path) as conn:
+            for identity, first, last, likes in (
+                ("a", "2020-01-01T00:00:00Z", "2026-08-01T00:00:00Z", 8),
+                ("b", "2023-04-01T00:00:00Z", "2026-06-01T00:00:00Z", 20),
+            ):
+                result = self.capture()
+                result["thread_id"] = identity
+                for row in result["comments"]:
+                    row["comment_id"] = row["comment_id"].replace("root", identity, 1)
+                    row["parent_id"] = row["parent_id"].replace("root", identity, 1)
+                    row["like_count"] = 9999 if not row["is_current_user"] else 1
+                second = dict(result["comments"][1], comment_id=identity + ".own2", text="later contribution", like_count=likes)
+                result["comments"].append(second)
+                store_refs(conn, [dict(ref(identity + ".own"), posted_at=first), dict(ref(identity + ".own2"), posted_at=last)])
+                store_capture(conn, result)
+            conn.execute("UPDATE threads SET last_activity_at='2099-01-01T00:00:00Z' WHERE thread_id='b'")
+            expected = {"newest": ["a", "b"], "oldest": ["a", "b"], "most_liked": ["b", "a"]}
+            for sort, ids in expected.items():
+                with self.subTest(sort=sort):
+                    pages = [search(conn, "hello", 1, page, sort) for page in range(2)]
+                    self.assertEqual([page["results"][0]["thread_id"] for page in pages], ids)
+                    self.assertEqual([page["total"] for page in pages], [2, 2])
+            a, b = search_descriptors(conn, "hello")
+            self.assertEqual(a["oldest_at"], "2020-01-01T00:00:00Z")
+            self.assertEqual(a["newest_at"], "2026-08-01T00:00:00Z")
+            self.assertEqual((a["like_count"], b["like_count"]), (8, 20))
+        plugin = YTCommentsPlugin()
+        plugin.db_path = self.path
+        plugin.config = {"sort": "oldest"}
+        status, payload = plugin.handle_api("GET", "search", {"q": ["hello"], "sort": ["most_liked"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["results"][0]["thread_id"], "b")
+        self.assertEqual(set(plugin.hydrate_search_results(["a"], "hello")), {"a"})
 
 
 if __name__ == "__main__":

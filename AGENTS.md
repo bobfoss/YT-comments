@@ -11,6 +11,10 @@ YouTube evidence. Keep full thread context, replies collapsed by default, and
 one search card per thread containing all that account's comments. Display
 profile aliases/names, falling back to channel IDs. Never label authors You.
 Reuse known profile thumbnails only. Do not fetch unknown authors' images.
+Global search cards require a nonblank matching query and share YTL's sorting
+and pagination. Newest/oldest use the participant's latest/earliest comment in
+the thread; Most liked uses their largest known like count. Do not add a separate
+card sort control. Empty local searches on video detail may still list threads.
 
 Backfill only threads discovered in My Activity, then update incrementally and
 alongside video metadata. Use host queues, cookies, proxy, pacing and discovery

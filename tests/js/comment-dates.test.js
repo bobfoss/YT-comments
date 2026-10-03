@@ -40,7 +40,7 @@ function setup() {
   });
   const host = {ui: {formatTime: value => `Exact ${value}`, localVideoHref: id => `/videos/${id}`}};
   return {
-    document, intervals,
+    document, intervals, plugin,
     advance: value => { now = Date.parse(value); },
     render(overrides = {}) {
       const row = {comment_id: 'root', author_id: 'channel', author_name: '@alias', text: 'Comment',
@@ -67,6 +67,16 @@ test('relative age advances without fetching or rerendering and retains edited m
   app.advance('2027-05-02T07:51:54Z');
   app.document.events.visibilitychange();
   assert.equal(timestamp.textContent, '1 year ago (edited)');
+});
+
+test('comment search uses host sorting and cards contain no separate sort control', () => {
+  const app = setup();
+  assert.equal(app.plugin.search.serverResults, true);
+  assert.equal(app.plugin.search.fetchEmptyQuery, undefined);
+  assert.equal(app.plugin.search.fetch, undefined);
+  assert.equal(app.plugin.search.sortOptions[0].value, 'most_liked');
+  assert.equal(typeof app.plugin.search.prepareResults, 'function');
+  assert.doesNotMatch(source, /Comment order|sortControl|showSort/);
 });
 
 test('exact dates retain edits and are not modified by the relative timer', () => {
