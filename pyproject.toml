@@ -15,7 +15,7 @@ requires-python = ">=3.11"
 comments = "yt_comments.plugin:YTCommentsPlugin"
 
 [tool.setuptools.package-data]
-yt_comments = ["*.js", "*.css"]
+yt_comments = ["*.js", "*.css", "ytl-plugin.json"]
 
 [tool.ruff.lint]
 select = ["F"]
