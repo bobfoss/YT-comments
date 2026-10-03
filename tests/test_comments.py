@@ -303,6 +303,25 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(search(conn, "", 10, 0, "newest", "abcdefghijk")["total"], 1)
             self.assertEqual(search(conn, "nomatch", 10, 0, "newest")["total"], 0)
 
+    def test_collection_browses_participation_without_query_or_video_filters(self):
+        with connection(self.path) as conn:
+            store_capture(conn, self.capture())
+        plugin = YTCommentsPlugin()
+        plugin.db_path = self.path
+        for query in ("", " \t ", "root.own", "hello"):
+            status, payload = plugin.handle_api("GET", "collection", {
+                "q": [query], "video_id": ["nonexistent"], "limit": ["1"], "offset": ["200"],
+            })
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["total"], 1)
+            self.assertEqual(payload["offset"], 0)
+            self.assertEqual(payload["results"][0]["thread_id"], "root")
+        self.assertEqual(plugin.handle_api("GET", "collection", {"q": ["nomatch"]})[1]["total"], 0)
+        self.assertEqual(plugin.handle_api("GET", "search", {"q": [""]})[1]["total"], 0)
+        with connection(self.path) as conn:
+            conn.execute("UPDATE comments SET is_current_user=0")
+        self.assertEqual(plugin.handle_api("GET", "collection", {})[1]["total"], 0)
+
     def test_thread_sorts_use_all_own_dates_and_likes_not_other_authors_or_discovery(self):
         with connection(self.path) as conn:
             for identity, first, last, likes in (
@@ -326,6 +345,8 @@ class PersistenceTests(unittest.TestCase):
                     pages = [search(conn, "hello", 1, page, sort) for page in range(2)]
                     self.assertEqual([page["results"][0]["thread_id"] for page in pages], ids)
                     self.assertEqual([page["total"] for page in pages], [2, 2])
+                    browse_pages = [search(conn, "", 1, page, sort, browse=True) for page in range(2)]
+                    self.assertEqual([page["results"][0]["thread_id"] for page in browse_pages], ids)
             a, b = search_descriptors(conn, "hello")
             self.assertEqual(a["oldest_at"], "2020-01-01T00:00:00Z")
             self.assertEqual(a["newest_at"], "2026-08-01T00:00:00Z")

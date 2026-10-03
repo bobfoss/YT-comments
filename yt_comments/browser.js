@@ -211,6 +211,10 @@
 
   api.register({
     id: 'comments',
+    collection: {
+      sorts: ['newest', 'oldest', 'most_liked'],
+      fetch: ({query, limit, offset, sort}, host) => host.requestJson('collection', {q: query, limit, offset, sort}),
+    },
     search: {
       capability: 'comment_search', label: 'Comments', serverResults: true,
       sortOptions: [{value: 'most_liked', label: 'Most liked'}],

@@ -36,7 +36,7 @@ children, plus a **Search in → Comments** field. Counts represent videos with
 captured participating threads; pending history references do not count yet.
 Selecting **no comments** excludes the separate thread cards. Parent and child
 selections use the shared video-filter controls and persist across reloads.
-Comment cards appear only for a nonblank matching search. One card represents
+In global search, comment cards appear only for a nonblank matching search. One card represents
 one thread and always includes every captured comment by
 the participant. Search includes comment IDs and thread IDs as well as text
 and author names. Other comments in that thread are searchable too; a matching
@@ -55,6 +55,16 @@ it uses the largest known like count among the participant's comments in each
 thread. Results without a known like count follow those with counts. Sorting
 preferences persist through YTL's shared controls. Video detail panels still
 list the video's threads when their local comment search is empty.
+
+**Meta → Comments**, between Videos and Playlists in the sidebar, opens
+`/comments`. This page lists all captured participating threads on a blank
+search and searches only comments when text is entered. It has no sidebar
+filter checkboxes or Search in controls, and ignores the global video filters.
+The shared sort control offers Newest, Oldest, and (when results exist) Most
+liked. Its Meta sort preference is saved separately from global search;
+query, sort, and page can also be restored from the URL. The plugin requires
+the host's generic `browser_collections_v1` feature. No schema change or
+recapture is needed.
 
 Exact My Activity timestamps are stored in UTC and displayed with YTL's
 configured timezone. Comments without an exact timestamp keep relative ages,

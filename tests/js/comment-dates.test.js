@@ -79,6 +79,19 @@ test('comment search uses host sorting and cards contain no separate sort contro
   assert.doesNotMatch(source, /Comment order|sortControl|showSort/);
 });
 
+test('collection requests its dedicated endpoint with blank queries and shared sort', async () => {
+  const app = setup();
+  const requests = [];
+  await app.plugin.collection.fetch({query: '', limit: 50, offset: 100, sort: 'oldest'}, {
+    requestJson: (endpoint, params) => { requests.push({endpoint, params}); return Promise.resolve({results: []}); },
+  });
+  assert.equal(requests[0].endpoint, 'collection');
+  assert.equal(requests[0].params.q, '');
+  assert.equal(requests[0].params.sort, 'oldest');
+  assert.equal(requests[0].params.offset, 100);
+  assert.deepEqual(Array.from(app.plugin.collection.sorts), ['newest', 'oldest', 'most_liked']);
+});
+
 test('exact dates retain edits and are not modified by the relative timer', () => {
   const app = setup();
   const timestamp = app.render({posted_at: '2026-04-08T18:58:06Z', estimated_posted_at: null,

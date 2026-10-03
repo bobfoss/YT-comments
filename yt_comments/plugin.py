@@ -20,7 +20,8 @@ class YTCommentsPlugin:
     plugin_name = "YT Comments"
     plugin_version = __version__
     plugin_api_version = 2
-    required_host_features = {"youtube_next_session_v1", "my_activity_session_v1", "worker_followup_v1", "video_discovery_v1", "video_facet_result_cards_v1", "unified_search_cards_v1"}
+    required_host_features = {"youtube_next_session_v1", "my_activity_session_v1", "worker_followup_v1", "video_discovery_v1", "video_facet_result_cards_v1", "unified_search_cards_v1", "browser_collections_v1"}
+    browser_collection = {"label": "Comments"}
     capabilities = {"comment_search", "comment_threads", "comment_presence", "worker_processes"}
     browser_assets = ({"path": "browser.js", "type": "script"}, {"path": "browser.css", "type": "style"})
 
@@ -161,9 +162,9 @@ class YTCommentsPlugin:
             return None
         value = lambda key, default="": str((query.get(key) or [default])[0])
         with connection(self.db_path) as conn:
-            if path == "search":
+            if path in {"search", "collection"}:
                 result = search(conn, value("q"), min(5000, max(1, int(value("limit", "30")))), max(0, int(value("offset", "0"))),
-                                value("sort", "newest"), value("video_id"))
+                                value("sort", "newest"), value("video_id") if path == "search" else "", browse=path == "collection")
                 return 200, result
             if path.startswith("threads/"):
                 result = thread_payload(conn, path.split("/", 1)[1], full=True)

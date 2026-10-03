@@ -15,6 +15,9 @@ Global search cards require a nonblank matching query and share YTL's sorting
 and pagination. Newest/oldest use the participant's latest/earliest comment in
 the thread; Most liked uses their largest known like count. Do not add a separate
 card sort control. Empty local searches on video detail may still list threads.
+Meta → Comments at `/comments` also lists threads for an empty query, searches
+only comments, and ignores global filters. Keep its navigation and browse API
+behind the generic `browser_collections_v1` host contract.
 
 Backfill only threads discovered in My Activity, then update incrementally and
 alongside video metadata. Use host queues, cookies, proxy, pacing and discovery

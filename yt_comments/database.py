@@ -185,8 +185,8 @@ def thread_payload(conn: sqlite3.Connection, thread_id: str, *, full: bool = Fal
     return result
 
 
-def search_descriptors(conn: sqlite3.Connection, query: str, video_id: str = "") -> list[dict[str, Any]]:
-    if not query.strip() and not video_id:
+def search_descriptors(conn: sqlite3.Connection, query: str, video_id: str = "", *, browse: bool = False) -> list[dict[str, Any]]:
+    if not query.strip() and not video_id and not browse:
         return []
     conditions = ["EXISTS(SELECT 1 FROM comments c WHERE c.thread_id=t.thread_id AND c.is_current_user=1)"]
     params: list[Any] = []
@@ -228,14 +228,17 @@ def search_items(conn: sqlite3.Connection, ids: list[str], query: str) -> dict[s
     return results
 
 
-def search(conn: sqlite3.Connection, query: str, limit: int, offset: int, sort: str, video_id: str = "") -> dict[str, Any]:
-    descriptors = search_descriptors(conn, query, video_id)
+def search(conn: sqlite3.Connection, query: str, limit: int, offset: int, sort: str, video_id: str = "", *, browse: bool = False) -> dict[str, Any]:
+    descriptors = search_descriptors(conn, query, video_id, browse=browse)
     if sort in {"likes", "most_liked"}:
         descriptors.sort(key=lambda row: -(row["like_count"] if row["like_count"] is not None else -1))
     elif sort == "oldest":
         descriptors.sort(key=lambda row: (row["oldest_at"] is None, row["oldest_at"] or ""))
     else:
         descriptors.sort(key=lambda row: row["newest_at"] or "", reverse=True)
+    if browse:
+        offset = min(offset, max(0, (len(descriptors) - 1) // limit) * limit)
     ids = [row["id"] for row in descriptors[offset:offset + limit]]
     items = search_items(conn, ids, query)
-    return {"total": len(descriptors), "totalIsExact": True, "results": [items[key] for key in ids if key in items]}
+    return {"total": len(descriptors), "totalIsExact": True, "limit": limit, "offset": offset,
+            "results": [items[key] for key in ids if key in items]}
